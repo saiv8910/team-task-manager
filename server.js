@@ -12,45 +12,58 @@ app.use(cors());
 app.use(express.json());
 
 // Database connection
-const pool = null;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false
+});
 
 // Initialize database tables
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL
-    );
+  try {
+    await pool.query(`
+      CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-    CREATE TABLE IF NOT EXISTS projects (
-      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      owner_id UUID REFERENCES users(id) ON DELETE CASCADE
-    );
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+      );
 
-    CREATE TABLE IF NOT EXISTS project_members (
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-      PRIMARY KEY (user_id, project_id)
-    );
+      CREATE TABLE IF NOT EXISTS projects (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        owner_id UUID REFERENCES users(id) ON DELETE CASCADE
+      );
 
-    CREATE TABLE IF NOT EXISTS tasks (
-      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-      title TEXT NOT NULL,
-      description TEXT,
-      status TEXT DEFAULT 'pending',
-      due_date DATE,
-      project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-      assigned_to UUID REFERENCES users(id) ON DELETE SET NULL
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS project_members (
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, project_id)
+      );
 
-  console.log('Database tables ready');
+      CREATE TABLE IF NOT EXISTS tasks (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'pending',
+        due_date DATE,
+        project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+        assigned_to UUID REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+
+    console.log('Database tables ready');
+  } catch (err) {
+    console.error('Database init error:', err.message);
+  }
 }
 
+initDB();
 // initDB();
 
 // Middleware to verify JWT
